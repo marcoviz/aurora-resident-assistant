@@ -16,7 +16,7 @@ Os especialistas executam ferramentas no contexto da mesma sessão persistida. A
 
 [`aurora/runtime.py`](aurora/runtime.py) adapta mensagens HTTP ao `Runner`. O `DatabaseSessionService` do ADK guarda histórico e estado em `.data/sessions.db`; [`aurora/store.py`](aurora/store.py) guarda dados do condomínio, vínculos e confirmações em `.data/condominio.db`. O diretório é configurável. Não é preciso serviço externo de banco.
 
-O modelo padrão é `gemini-3.8-flash`, listado na [documentação oficial de modelos Gemini](https://ai.google.dev/gemini-api/docs/models), consultada em 19/10/2026. `GEMINI_MODEL` permite escolher outro Gemini disponível no projeto do Google AI Studio. Disponibilidade e cota dependem desse projeto. A integração usa a [confirmação nativa documentada pelo ADK](https://adk.dev/tools-custom/confirmation/), por `adk_request_confirmation` e `FunctionResponse`.
+O modelo padrão é `gemini-3.1-flash-lite`, validado na API do Google AI Studio em 19/10/2026. A [documentação oficial de modelos Gemini](https://ai.google.dev/gemini-api/docs/models) descreve as opções disponíveis. `GEMINI_MODEL` permite escolher outro Gemini disponível no projeto do Google AI Studio. Disponibilidade e cota dependem desse projeto. O runtime configura até cinco tentativas da chamada ao modelo para erros transitórios 429/5xx, com espera exponencial de 4 a 30 segundos; isso não repete a execução de ferramentas. Se a indisponibilidade persistir, a API responde 503 sem expor detalhes internos do provedor. Esse erro não desfaz uma operação gratuita que a ferramenta já tenha concluído antes da falha; as rotas de verificação mostram o estado persistido. Nas aprovações, se o efeito já foi gravado, o runtime devolve seu resultado persistido mesmo quando a resposta posterior do modelo falha. A integração usa a [confirmação nativa documentada pelo ADK](https://adk.dev/tools-custom/confirmation/), por `adk_request_confirmation` e `FunctionResponse`.
 
 ## Garantias
 
@@ -41,7 +41,7 @@ cp .env.example .env
 uv sync --locked
 ```
 
-Preencha `GOOGLE_API_KEY` no `.env` com a chave do Google AI Studio. As outras variáveis são opcionais: `GEMINI_MODEL` seleciona o modelo (padrão `gemini-3.8-flash`); `AURORA_DATA_DIR` seleciona o diretório dos dois bancos (padrão `.data`). O `.env.example` contém somente nomes, sem valores. Não envie o `.env` ao Git.
+Preencha `GOOGLE_API_KEY` no `.env` com a chave do Google AI Studio. As outras variáveis são opcionais: `GEMINI_MODEL` seleciona o modelo (padrão `gemini-3.1-flash-lite`); `AURORA_DATA_DIR` seleciona o diretório dos dois bancos (padrão `.data`). O `.env.example` contém somente nomes, sem valores. Não envie o `.env` ao Git.
 
 Com a API parada, restaure as sementes:
 
@@ -83,17 +83,17 @@ Para executar os testes sem rede:
 uv run python -m unittest discover -v
 ```
 
-Os testes usam [`tests/fake_model.py`](tests/fake_model.py) para substituir **somente a geração do LLM** por chamadas roteirizadas. FastAPI, ferramentas, Runner, eventos, confirmação nativa e `DatabaseSessionService` SQLite são os componentes reais. Isso testa efeitos, isolamento, retomada, negação, reenvio, consultas especializadas e concorrência sem consumir cota. Não demonstra compreensão de linguagem natural nem conectividade com Gemini. Uma execução real com chave do Google AI Studio ainda é necessária para verificar essas duas partes.
+Os testes usam [`tests/fake_model.py`](tests/fake_model.py) para substituir **somente a geração do LLM** por chamadas roteirizadas. FastAPI, ferramentas, Runner, eventos, confirmação nativa e `DatabaseSessionService` SQLite são os componentes reais. Isso testa efeitos, isolamento, retomada, negação, reenvio, consultas especializadas e concorrência sem consumir cota. Essa suíte verifica as invariantes sem depender da disponibilidade do provedor. A validação com linguagem natural e conexão real ao Gemini está registrada abaixo.
 
 Resultado local em 19/10/2026, Python 3.12.14 e ADK 2.9.1:
 
 ```text
-Ran 9 tests in 1.398s
+Ran 11 tests in 1.368s
 
 OK
 ```
 
-A suíte verifica a preservação exata dos eventos ao fechar e recriar o runtime, aprova a confirmação pendente após essa recriação e envia uma nova mensagem pela mesma sessão. Também executa consultas pelos dois especialistas, cancelamento próprio e tentativa de cancelar reserva alheia, negação de visitante, reenvio 409, quadra sem confirmação e disputa simultânea com duas respostas HTTP 200 e apenas uma reserva.
+Dois testes adicionais verificam erros transitórios do provedor: HTTP 503 sem detalhes internos antes de qualquer efeito, e retorno do resultado persistido quando o Gemini falha depois de uma aprovação já gravada, sem duplicação no reenvio. A suíte verifica a preservação exata dos eventos ao fechar e recriar o runtime, aprova a confirmação pendente após essa recriação e envia uma nova mensagem pela mesma sessão. Também executa consultas pelos dois especialistas, cancelamento próprio e tentativa de cancelar reserva alheia, negação de visitante, reenvio 409, quadra sem confirmação e disputa simultânea com duas respostas HTTP 200 e apenas uma reserva.
 
 Com a porta 8000 livre, o smoke abaixo sobe os comandos reais em processos separados, usa dados temporários, reinicia a API e confere contratos HTTP sem chamar o Gemini:
 
@@ -112,3 +112,18 @@ PASS HTTP contratos de erro 409 e 404
 PASS HTTP processo reiniciado com sessao e dados persistidos
 5/5 smoke HTTP PASS; Gemini nao foi chamado.
 ```
+
+
+## Validação com Gemini real
+
+Em **19/10/2026**, a API foi executada em processos reais com `gemini-3.1-flash-lite`, Runner ADK e os dois bancos SQLite, sem componentes simulados. Foram aprovadas **21 verificações**, cobrindo os 14 passos funcionais do fluxo do avaliador, além da preservação dos cinco arquivos originais. A execução durou aproximadamente 5 minutos e 50 segundos; o cliente de validação espaçou os turnos para respeitar a cota do projeto.
+
+A [evidência JSON](evidence/gemini-http-validation.json) contém requisições e respostas HTTP, eventos ADK, chamadas de ferramentas, hashes das sementes e metadados de uso. Foram registradas 34 respostas do modelo com metadados de uso; tentativas transitórias sem resposta não entram nessa contagem.
+
+- Pedidos para ler ou cancelar dados do 302, feitos pela sessão do 101, não expuseram nem alteraram esses dados.
+- Cancelamento próprio e quadra gratuita funcionaram sem confirmação. Salão e visitante só produziram efeito pela rota de confirmações; negação, reenvio e confirmação de outra sessão respeitaram o contrato.
+- O especialista consultou apenas o capítulo da piscina e respondeu **20h** para o fechamento aos domingos. Os eventos não continham capítulos alheios ao assunto.
+- Os **65 eventos** de S1 foram preservados integralmente depois de parar e subir a API. Uma nova mensagem na mesma sessão aumentou o histórico para **74 eventos**, mantendo reservas e visitante.
+- Duas aprovações simultâneas para o mesmo salão e data receberam **HTTP 200**; somente uma reserva permaneceu ativa.
+
+Esses resultados registram uma execução real e não garantem disponibilidade ou cota futura do Gemini. A validação não envia nada para a plataforma do curso.

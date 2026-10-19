@@ -6,9 +6,10 @@ from pathlib import Path
 from uuid import uuid4
 
 from google.adk.apps import App, ResumabilityConfig
+from google.adk.models.google_llm import Gemini
 from google.adk.runners import Runner
 from google.adk.sessions import DatabaseSessionService
-from google.genai import types
+from google.genai import errors, types
 
 from .agents import IDENTITY, RequestIdentity, build_agents
 from .store import ConfirmationConflict, Store
@@ -28,7 +29,12 @@ class Runtime:
         self.store = Store(self.directory / 'condominio.db')
         self.sessions = DatabaseSessionService(db_url=f'sqlite+aiosqlite:///{self.directory / "sessions.db"}')
         self.injected_model = model is not None
-        agent = build_agents(self.store, model or os.getenv('GEMINI_MODEL') or 'gemini-3.8-flash')
+        provider = model or Gemini(
+            model=os.getenv('GEMINI_MODEL') or 'gemini-3.1-flash-lite',
+            retry_options=types.HttpRetryOptions(
+                attempts=5, initial_delay=4, max_delay=30,
+                http_status_codes=[429, 500, 502, 503, 504]))
+        agent = build_agents(self.store, provider)
         app = App(name=APP_NAME, root_agent=agent, resumability_config=ResumabilityConfig(is_resumable=True))
         self.runner = Runner(app=app, session_service=self.sessions)
         self.locks = {}
@@ -79,6 +85,10 @@ class Runtime:
                     message = ''.join(part.text or '' for part in event.content.parts or [])
                     if message:
                         answer = message
+        except errors.APIError as error:
+            if error.code in (429, 500, 502, 503, 504):
+                raise ModelUnavailable('Gemini temporariamente indisponivel ou com limite de uso atingido. Tente novamente mais tarde.') from None
+            raise
         finally:
             IDENTITY.reset(token)
         pending = self.store.pending(session_id)

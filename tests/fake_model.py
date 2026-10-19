@@ -21,6 +21,8 @@ class ScriptedModel(BaseLlm):
         if not self.script:
             raise AssertionError('LLM foi invocado sem uma resposta prevista pelo teste.')
         item = self.script.pop(0)
+        if 'error' in item:
+            raise item['error']
         if 'text' in item:
             part = types.Part(text=item['text'])
         else:

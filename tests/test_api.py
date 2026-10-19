@@ -5,6 +5,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 import httpx
+from google.genai import errors
 
 from aurora.api import create_app
 from aurora.runtime import Runtime
@@ -41,6 +42,36 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         response = await self.client.post(f'/sessoes/{session}/confirmacoes', json={'id': confirmation, 'confirmado': approved})
         self.assertEqual(expected, response.status_code, response.text)
         return response.json()
+
+    async def test_provider_unavailable_is_safe_503_with_no_domain_effect(self):
+        for status in (429, 503):
+            with self.subTest(status=status):
+                session = await self.session()
+                self.model.script.append({'error': errors.APIError(status, {
+                    'error': {'message': 'sensitive-provider-detail', 'status': 'UNAVAILABLE'}})})
+                before = self.runtime.store.reservations('101')
+                response = await self.client.post(f'/sessoes/{session}/mensagens',
+                                                 json={'texto': 'Reserve a quadra para 2030-04-06.'})
+                self.assertEqual(503, response.status_code)
+                self.assertNotIn('sensitive-provider-detail', response.text)
+                self.assertEqual(before, self.runtime.store.reservations('101'))
+                self.assertEqual([], self.runtime.store.pending(session))
+
+    async def test_provider_failure_after_approval_returns_committed_result_once(self):
+        session = await self.session()
+        self.model.call('reservar_area', area='salao-de-festas', data='2030-04-20')
+        result = await self.message(session, 'Reserve o salão de festas para 2030-04-20.')
+        confirmation = result['confirmacoes_pendentes'][0]['id']
+        self.model.script.append({'error': errors.APIError(503, {
+            'error': {'message': 'sensitive-provider-detail', 'status': 'UNAVAILABLE'}})})
+        response = await self.confirm(session, confirmation)
+        committed = json.loads(response['resposta'])
+        self.assertEqual('reservada', committed['status'])
+        self.assertNotIn('sensitive-provider-detail', json.dumps(response))
+        await self.confirm(session, confirmation, expected=409)
+        reservations = self.runtime.store.reservations('101')
+        self.assertEqual(1, sum(row['codigo'] == committed['codigo'] for row in reservations))
+        self.assertEqual([], self.runtime.store.pending(session))
 
     async def test_native_pending_restart_approval_and_replay(self):
         session = await self.session()
