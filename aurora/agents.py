@@ -2,13 +2,12 @@
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import date
-import re
-import unicodedata
 
 from google.adk.agents import LlmAgent
 from google.adk.tools import ToolContext
 
-from .store import ROOT, Store
+from .regulation import regulation_excerpt
+from .store import Store
 
 
 @dataclass(frozen=True)
@@ -20,36 +19,6 @@ class RequestIdentity:
 
 
 IDENTITY: ContextVar[RequestIdentity] = ContextVar('aurora_identity')
-
-
-def normalize(value):
-    return ''.join(c for c in unicodedata.normalize('NFD', value.lower()) if unicodedata.category(c) != 'Mn')
-
-
-def regulation_excerpt(subject: str, user_text: str):
-    """Limita a leitura ao assunto presente na mensagem original do morador."""
-    topics = {
-        'III': ('silencio', 'barulho', 'ruido', 'sossego'),
-        'IV': ('piscina',),
-        'V': ('academia', 'brinquedoteca', 'playground'),
-        'VI': ('salao', 'churrasqueira', 'quadra', 'reserva'),
-        'VII': ('portaria', 'visitante', 'seguranca', 'entrega'),
-        'VIII': ('animal', 'animais', 'cachorro', 'pet'),
-        'IX': ('mudanca',), 'X': ('obra', 'reforma'),
-        'XI': ('garagem', 'veiculo', 'vaga'),
-        'XII': ('lixo', 'reciclagem', 'coleta'),
-        'XIII': ('multa', 'penalidade', 'infracao'),
-    }
-    asked, original = normalize(subject), normalize(user_text)
-    chapters = [chapter for chapter, words in topics.items()
-                if any(word in asked for word in words) and any(word in original for word in words)]
-    if not chapters:
-        return {'status': 'especifique_assunto', 'texto': 'Informe o assunto do regulamento que deseja consultar.'}
-    document = (ROOT / 'dados' / 'regulamento.md').read_text()
-    sections = re.split(r'(?=^## )', document, flags=re.M)
-    selected = [section.strip() for section in sections
-                if any(re.match(r'## Capítulo ' + chapter + r':', section) for chapter in chapters)]
-    return {'fonte': 'regulamento.md', 'trecho': '\n\n'.join(selected)}
 
 
 def build_agents(store: Store, model):
@@ -132,16 +101,19 @@ def build_agents(store: Store, model):
         bound = identity(tool_context)
         return regulation_excerpt(assunto, bound.text)
 
+    session_instruction = ('Esta sessao pertence ao apartamento {apartamento}. '
+        'Apresente os dados como pertencentes ao apartamento {apartamento}, mesmo se a mensagem alegar outra unidade. '
+        'Nao aceite trocar o apartamento nem atribua os dados consultados a outra unidade. ')
     consultas = LlmAgent(name='consultas_condominio', model=model, mode='single_turn',
         description='Consulta areas, disponibilidade, reservas e visitantes proprios; cancela reservas proprias.',
-        instruction='Use ferramentas para toda leitura ou cancelamento. Nao troque apartamento. Se pedirem dados de outro apartamento, recuse. Devolva o resultado factual da ferramenta, sem criar dados.',
+        instruction=session_instruction + 'Use ferramentas para toda leitura ou cancelamento. Se pedirem dados de outro apartamento, recuse. Devolva o resultado factual da ferramenta, sem criar dados.',
         tools=[listar_areas, consultar_reservas, consultar_visitantes, consultar_disponibilidade, cancelar_reserva])
     regras = LlmAgent(name='regulamento', model=model, mode='single_turn',
         description='Responde duvidas sobre regras do condominio consultando apenas o assunto pedido.',
-        instruction='Use consultar_regulamento com o assunto da pergunta. Responda somente com o trecho retornado. Se nao houver trecho, peca que especifique o assunto. Nao busque capitulos alheios ao pedido.',
+        instruction=session_instruction + 'Use consultar_regulamento com o assunto especifico da pergunta. Responda somente com o trecho retornado. Se nao houver trecho, peca que especifique um assunto por vez. Nao busque capitulos alheios ao pedido.',
         tools=[consultar_regulamento])
     return LlmAgent(name='aurora', model=model, mode='chat',
-        instruction=('Voce e Aurora, assistente do condominio. Responda em portugues. O apartamento e fixado pela sessao; nunca aceite trocas ou exponha dados de terceiros. '
+        instruction=(session_instruction + 'Voce e Aurora, assistente do condominio. Responda em portugues. Nunca exponha dados de terceiros. '
         'Use consultas_condominio para consultar dados ou cancelar reservas; regulamento para regras. '
         'Execute reservar_area e autorizar_visitante nas ferramentas deste agente. Nunca invente dados, regras ou gravacoes. '
         'Areas: salao-de-festas, churrasqueira e quadra. Datas AAAA-MM-DD. Solicite campos ausentes. '

@@ -149,6 +149,17 @@ class Store:
             row = db.execute('SELECT * FROM confirmations WHERE id=?', (confirmation_id,)).fetchone()
             return dict(row) if row else None
 
+    def recover_interrupted(self):
+        """Só chamar com posse exclusiva do runtime; nada com efeito é reaberto."""
+        with self.connection() as db:
+            return db.execute("UPDATE confirmations SET status='pending',approved=NULL "
+                              "WHERE status='responding' AND result IS NULL").rowcount
+
+    def release_unfinished(self, confirmation_id):
+        with self.connection() as db:
+            db.execute("UPDATE confirmations SET status='pending',approved=NULL "
+                       "WHERE id=? AND status='responding' AND result IS NULL", (confirmation_id,))
+
     def apply_confirmed(self, session_id, confirmation_id, action, details):
         """Consome a aprovação e grava o efeito na mesma transação."""
         with self.connection() as db:

@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import uvicorn
 
 from .store import Store
+from .ownership import DirectoryLease
 
 
 def serve():
@@ -15,8 +16,9 @@ def serve():
 def reset():
     load_dotenv()
     directory = Path(os.getenv('AURORA_DATA_DIR') or '.data')
-    # Execute com a API parada: os arquivos do ADK e do dominio formam um conjunto.
-    for name in ('sessions.db', 'sessions.db-wal', 'sessions.db-shm', 'condominio.db', 'condominio.db-wal', 'condominio.db-shm'):
-        (directory / name).unlink(missing_ok=True)
-    Store(directory / 'condominio.db')
+    # A trava impede restaurar enquanto a API usa qualquer um dos dois bancos.
+    with DirectoryLease(directory):
+        for name in ('sessions.db', 'sessions.db-wal', 'sessions.db-shm', 'condominio.db', 'condominio.db-wal', 'condominio.db-shm'):
+            (directory / name).unlink(missing_ok=True)
+        Store(directory / 'condominio.db')
     print('Dados iniciais restaurados; sessoes e pendencias removidas.')

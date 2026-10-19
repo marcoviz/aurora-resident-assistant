@@ -1,0 +1,178 @@
+{
+  "checked_at": "2026-10-19T21:59:10.907417+00:00",
+  "validation_kind": "offline; model generation scripted, ASGI/ADK Runner/tools/SQLite real",
+  "python": "3.12.14",
+  "google_adk": "2.9.1",
+  "suite": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests -v",
+    "status": "passed",
+    "tests": 15,
+    "elapsed_seconds": 13.064,
+    "output_sha256": "3e6af0a8147f99fc860257422a47dde0c5aada7fd29a2b8b3585bb6291cec0fe"
+  },
+  "regressions": [
+    "All 14 chapters inspected in persisted ADK tool-response events via ASGI",
+    "Moving/elevator query contains chapter IX only, never leisure chapter VI",
+    "Pool Sunday result contains 20h and chapter IV only",
+    "Tool subject cannot expand an original pool query into garage rules",
+    "All three agents receive apartment 101 from state despite user claiming 302",
+    "Subprocess exits inside confirmed visitor tool before transaction: pending restored, reapproval writes once",
+    "Subprocess exits inside confirmed visitor tool after transaction: replay stays 409, one visitor",
+    "Original events survive both subprocess crashes and same sessions accept new messages",
+    "Second live runtime/reset lease refused before it can reopen an active confirmation",
+    "Original confirmation, isolation, free booking, denial, persistence and concurrent reservation tests still pass"
+  ],
+  "direct_retrieval_probes": [
+    {
+      "query": "Posso trabalhar remotamente em casa?",
+      "expected_chapter": "I",
+      "actual_chapter": "I",
+      "headings": [
+        "I"
+      ],
+      "excerpt_sha256": "6ddfa3afab9fb93c440933975bb2767252397f54271a25550c938938532d37f9"
+    },
+    {
+      "query": "Quais são os deveres dos moradores?",
+      "expected_chapter": "II",
+      "actual_chapter": "II",
+      "headings": [
+        "II"
+      ],
+      "excerpt_sha256": "b90a4f8aa58b69a6537e2c5b05ccdb7f759ded667a239d0e256d0913e01f5b24"
+    },
+    {
+      "query": "Qual o horário de silêncio?",
+      "expected_chapter": "III",
+      "actual_chapter": "III",
+      "headings": [
+        "III"
+      ],
+      "excerpt_sha256": "9493307394f551b8a2cd7eff6513e4ed8bcba7d8c34f2e7b517c2ff41ec8eec9"
+    },
+    {
+      "query": "Até que horas a piscina funciona aos domingos?",
+      "expected_chapter": "IV",
+      "actual_chapter": "IV",
+      "headings": [
+        "IV"
+      ],
+      "excerpt_sha256": "776ffae03c48d2908b760628a766dd17ac71b5be90dbe81a29346f0c05ad7368"
+    },
+    {
+      "query": "Qual é o horário da academia?",
+      "expected_chapter": "V",
+      "actual_chapter": "V",
+      "headings": [
+        "V"
+      ],
+      "excerpt_sha256": "ba6a56f25bb44392a37cb8af0a009e61dc3e6793c9b0ce77abd1ad37fe70e9eb"
+    },
+    {
+      "query": "Quais as regras do salão de festas?",
+      "expected_chapter": "VI",
+      "actual_chapter": "VI",
+      "headings": [
+        "VI"
+      ],
+      "excerpt_sha256": "974240de9df58dc5bed4653de24b353c06b580fc2eb22a7ec7eb553cd35e83b8"
+    },
+    {
+      "query": "Como funcionam as encomendas na portaria?",
+      "expected_chapter": "VII",
+      "actual_chapter": "VII",
+      "headings": [
+        "VII"
+      ],
+      "excerpt_sha256": "bb6c6b8caef231e534032de38cf58b9cf221fbb73ef90e0fe9e95f5c4bab4c5b"
+    },
+    {
+      "query": "Meu cachorro precisa de focinheira?",
+      "expected_chapter": "VIII",
+      "actual_chapter": "VIII",
+      "headings": [
+        "VIII"
+      ],
+      "excerpt_sha256": "20a07b63ea0439cdccde3173877d317c32fbf043df5ed70918945b1a76e0e8b8"
+    },
+    {
+      "query": "Posso reservar o elevador para a mudança?",
+      "expected_chapter": "IX",
+      "actual_chapter": "IX",
+      "headings": [
+        "IX"
+      ],
+      "excerpt_sha256": "ec95c90fcab6db50922914a1d5c24e0d1d31a017503656d663ce2f61caa06790"
+    },
+    {
+      "query": "Quais são os horários das obras?",
+      "expected_chapter": "X",
+      "actual_chapter": "X",
+      "headings": [
+        "X"
+      ],
+      "excerpt_sha256": "ac408a4a4aa9d7362c2312fdc83ed9ae568cabaef4d7d6979fdb72f60d71e3fd"
+    },
+    {
+      "query": "Qual é a velocidade máxima na garagem?",
+      "expected_chapter": "XI",
+      "actual_chapter": "XI",
+      "headings": [
+        "XI"
+      ],
+      "excerpt_sha256": "33dc0a12fe0285687a7bc8e514fb528bbbf6f6a794eda2302e4c63d6a99a9819"
+    },
+    {
+      "query": "Como separar o lixo reciclável?",
+      "expected_chapter": "XII",
+      "actual_chapter": "XII",
+      "headings": [
+        "XII"
+      ],
+      "excerpt_sha256": "c676dbc564092f4b6fbc3511db69a1b047c1f02d46564cae9a299f18899e760a"
+    },
+    {
+      "query": "Como apresentar defesa contra uma multa?",
+      "expected_chapter": "XIII",
+      "actual_chapter": "XIII",
+      "headings": [
+        "XIII"
+      ],
+      "excerpt_sha256": "bfcb75e163ccb410b1486e2efbc5892d3cf86dff7cbb6a2a221d127cdafceafe"
+    },
+    {
+      "query": "Como o regulamento pode ser alterado?",
+      "expected_chapter": "XIV",
+      "actual_chapter": "XIV",
+      "headings": [
+        "XIV"
+      ],
+      "excerpt_sha256": "e33f9c5fee8e99b1f396a19a33fcf91a7c170ea6c2f8f55d940fe759e5c3c058"
+    }
+  ],
+  "source_sha256": {
+    "aurora/__init__.py": "510d14b5315434d54396be5acc1c8b1ad904b62deadfbfc43261d9eadce1da66",
+    "aurora/agents.py": "0e61b69f6b74c67ea8b1a1f499d9213fc211ad9601ca91893522c36c5c95af89",
+    "aurora/api.py": "b44812040e8bc66895f2f20cc2aaa9a5b942e239094a9de8e2e1369d428baaf8",
+    "aurora/cli.py": "4d13597549a15c8356191b7322e5e0ec449d6e36e536ef9d0d9bc73b6a414e76",
+    "aurora/ownership.py": "ad40938d6ffdcdbefd996b6249f19194cdf116455c53b701df6ec4bc6c0f0b59",
+    "aurora/regulation.py": "f95f687b38c7809742f7f48f95db13345e3991dc903c8a0f3d955935c95646c5",
+    "aurora/runtime.py": "8d68fb9b1f7575b8751bb6b3002f33f64302b832dfafe72be39ca9bbc7fa26f7",
+    "aurora/store.py": "c2475b36143f3b1a35e6fdf33129783a584f705f96dda1a65b18819490284657",
+    "tests/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tests/crash_confirmation.py": "dc0fd02a161699a2b1d21dbdfaa58f1295a532861129e14bb05415215ea48fa3",
+    "tests/fake_model.py": "6989256e75033c934cf08762ead27b04872bed0c24f33a4ebb646b9fcd14477c",
+    "tests/smoke_http.py": "5e8882a6a97ec3acdeb4d79ae1f98aefb9286d6da8ff85d74148b1777238146b",
+    "tests/test_api.py": "d4ce4a2c7f40d767a1bcdee7d20dbdfdd897b6d00fc9675772c2f1d0bb721662",
+    "tests/test_domain.py": "d276f2a509a2882713b9f4f7d6fc2e58f70abb8a7643bce35fbb74606e2a0b39"
+  },
+  "seed_sha256": {
+    "apartamentos.json": "d4b297899313f37e5bbb3ab9d1f7f070bb5985feca06058c5bce32c8c970b44b",
+    "areas.json": "e56489365f156bd1be75961a3ccc965bf72cc2cef998bc5863c78ddded44c619",
+    "regulamento.md": "86893f3b1471c06ec48c4004d2a9739134b22fac4ec5802b5d10a554cb5f4494",
+    "reservas.json": "a1b849ac213ee8c208907e525e42d45f6ffe544710b7eed53a60f195e1a87197",
+    "visitantes.json": "15a98d85b92479f5fa4f242d475c7ed4a2f7f4cd5826d2d0b867fa68c1fb88d5"
+  },
+  "gemini_calls_in_this_validation": 0,
+  "limits": "This record does not claim fresh Gemini or socket HTTP validation. Historical Gemini evidence is separate. The language-model tool choices are scripted in regression tests."
+}

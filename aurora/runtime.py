@@ -12,6 +12,7 @@ from google.adk.sessions import DatabaseSessionService
 from google.genai import errors, types
 
 from .agents import IDENTITY, RequestIdentity, build_agents
+from .ownership import DirectoryLease
 from .store import ConfirmationConflict, Store
 
 APP_NAME = 'aurora_resident'
@@ -26,7 +27,16 @@ class Runtime:
     def __init__(self, directory: Path, *, model=None):
         self.directory = Path(directory).resolve()
         self.directory.mkdir(parents=True, exist_ok=True)
+        self.lease = DirectoryLease(self.directory)
+        try:
+            self._initialize(model)
+        except BaseException:
+            self.lease.close()
+            raise
+
+    def _initialize(self, model):
         self.store = Store(self.directory / 'condominio.db')
+        self.store.recover_interrupted()
         self.sessions = DatabaseSessionService(db_url=f'sqlite+aiosqlite:///{self.directory / "sessions.db"}')
         self.injected_model = model is not None
         provider = model or Gemini(
@@ -47,8 +57,11 @@ class Runtime:
             raise ModelUnavailable('Configure GOOGLE_API_KEY para conversar com o Gemini.')
 
     async def close(self):
-        await self.runner.close()
-        await self.sessions.close()
+        try:
+            await self.runner.close()
+            await self.sessions.close()
+        finally:
+            self.lease.close()
 
     async def create_session(self, apartment):
         session_id = str(uuid4())
@@ -123,12 +136,12 @@ class Runtime:
                     # O efeito ja foi efetivado. Uma falha posterior do modelo nao deve induzir repeticao.
                     return {'resposta': json.dumps(json.loads(current['result']), ensure_ascii=False),
                             'confirmacoes_pendentes': self.store.pending(session_id)}
-                with self.store.connection() as db:
-                    db.execute("UPDATE confirmations SET status='pending',approved=NULL WHERE id=? AND status='responding'", (confirmation_id,))
+                self.store.release_unfinished(confirmation_id)
                 raise
             if not approved:
                 self.store.finish_denied(confirmation_id)
             if approved and self.store.confirmation(confirmation_id)['status'] != 'done':
+                self.store.release_unfinished(confirmation_id)
                 raise RuntimeError('ADK nao retomou a ferramenta original; acao nao efetivada.')
             response['confirmacoes_pendentes'] = self.store.pending(session_id)
             return response

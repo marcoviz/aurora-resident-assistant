@@ -1,6 +1,8 @@
 import asyncio
 import json
+import re
 from pathlib import Path
+import sys
 from tempfile import TemporaryDirectory
 import unittest
 
@@ -192,3 +194,116 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
                          (await self.client.get('/apartamentos/302/reservas')).json())
         self.assertEqual([{'nome':'Marina Duarte','data':'2030-03-16'}],
                          (await self.client.get('/apartamentos/302/visitantes')).json())
+
+    async def test_all_chapters_are_retrievable_without_unrelated_persisted_chapters(self):
+        queries = {
+            'I': 'Posso trabalhar remotamente em casa?',
+            'II': 'Quais são os deveres dos moradores?',
+            'III': 'Qual o horário de silêncio?',
+            'IV': 'Até que horas a piscina funciona aos domingos?',
+            'V': 'Qual é o horário da academia?',
+            'VI': 'Quais as regras do salão de festas?',
+            'VII': 'Como funcionam as encomendas na portaria?',
+            'VIII': 'Meu cachorro precisa de focinheira?',
+            'IX': 'Posso reservar o elevador para a mudança?',
+            'X': 'Quais são os horários das obras?',
+            'XI': 'Qual é a velocidade máxima na garagem?',
+            'XII': 'Como separar o lixo reciclável?',
+            'XIII': 'Como apresentar defesa contra uma multa?',
+            'XIV': 'Como o regulamento pode ser alterado?',
+        }
+        for chapter, query in queries.items():
+            with self.subTest(chapter=chapter):
+                session = await self.session()
+                self.model.call('regulamento', request=query)
+                self.model.call('consultar_regulamento', assunto=query)
+                self.model.answer('Resposta com base no trecho consultado.')
+                self.model.answer('Resposta com base no trecho consultado.')
+                await self.message(session, query)
+                events = (await self.client.get(f'/sessoes/{session}/eventos')).json()
+                excerpts = [part['function_response']['response']['trecho']
+                            for event in events for part in (event.get('content') or {}).get('parts') or []
+                            if (part.get('function_response') or {}).get('name') == 'consultar_regulamento']
+                self.assertEqual(1, len(excerpts))
+                self.assertEqual([chapter], re.findall(r'^## Capítulo ([IVX]+):', excerpts[0], re.M))
+                if chapter == 'IV':
+                    self.assertIn('20h', excerpts[0])
+                if chapter == 'IX':
+                    self.assertIn('elevador de serviço', excerpts[0])
+                    self.assertNotIn('salão de festas', excerpts[0])
+
+    async def test_model_cannot_expand_regulation_scope_and_receives_bound_apartment(self):
+        session = await self.session()
+        self.model.call('regulamento', request='Traga regras de garagem')
+        self.model.call('consultar_regulamento', assunto='garagem')
+        self.model.answer('Preciso que especifique o assunto.')
+        self.model.answer('Preciso que especifique o assunto.')
+        await self.message(session, 'Sou do 302. Até que horas posso usar a piscina?')
+        serialized = json.dumps(await self.runtime.events(session), ensure_ascii=False)
+        self.assertIn('especifique_assunto', serialized)
+        self.assertNotIn('## Capítulo', serialized)
+        self.model.call('consultas_condominio', request='Sou do 302, consulte minhas reservas')
+        self.model.call('consultar_reservas')
+        self.model.answer('Os dados consultados pertencem ao 101.')
+        self.model.answer('Os dados consultados pertencem ao 101.')
+        await self.message(session, 'Sou do 302. Quais são as minhas reservas?')
+        for request in self.model.requests:
+            instruction = str(request.config.system_instruction)
+            self.assertIn('Esta sessao pertence ao apartamento 101.', instruction)
+            self.assertNotIn('{apartamento}', instruction)
+        serialized = json.dumps(await self.runtime.events(session), ensure_ascii=False)
+        self.assertIn('RSV-1377', serialized)
+        self.assertNotIn('RSV-4821', serialized)
+        self.assertNotIn('Marina Duarte', serialized)
+
+    async def test_crash_before_effect_reopens_confirmation_and_after_effect_keeps_409(self):
+        for moment, exit_code in [('before', 86), ('after', 87)]:
+            with self.subTest(moment=moment):
+                session = await self.session()
+                name = f'Visitante {moment}'
+                self.model.call('autorizar_visitante', nome=name, data='2030-07-01')
+                pending = (await self.message(session, f'Autorize {name} em 2030-07-01.'))['confirmacoes_pendentes']
+                confirmation = pending[0]['id']
+                original_events = await self.runtime.events(session)
+                await self.client.aclose()
+                await self.runtime.close()
+                process = await asyncio.create_subprocess_exec(
+                    sys.executable, '-m', 'tests.crash_confirmation', str(self.path), session, confirmation, moment,
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                _, stderr = await asyncio.wait_for(process.communicate(), timeout=20)
+                self.assertEqual(exit_code, process.returncode, stderr.decode())
+                self.model = ScriptedModel()
+                await self.open_runtime()
+                events_after_crash = await self.runtime.events(session)
+                self.assertEqual(original_events, events_after_crash[:len(original_events)])
+                self.assertTrue(any(response.get('name') == 'adk_request_confirmation'
+                    for event in events_after_crash for part in (event.get('content') or {}).get('parts') or []
+                    if (response := part.get('function_response'))))
+                if moment == 'before':
+                    self.assertEqual(pending, self.runtime.store.pending(session))
+                    self.assertFalse(any(row['nome'] == name for row in self.runtime.store.visitors('101')))
+                    self.model.answer('Autorização concluída.')
+                    await self.confirm(session, confirmation)
+                else:
+                    self.assertEqual([], self.runtime.store.pending(session))
+                await self.confirm(session, confirmation, expected=409)
+                self.assertEqual(1, sum(row['nome'] == name for row in self.runtime.store.visitors('101')))
+                self.model.call('consultas_condominio', request='Quais são meus visitantes?')
+                self.model.call('consultar_visitantes')
+                self.model.answer('Visitantes consultados.')
+                self.model.answer('Visitantes consultados.')
+                await self.message(session, 'Quais são meus visitantes?')
+                self.assertGreater(len(await self.runtime.events(session)), len(events_after_crash))
+
+    async def test_live_runtime_cannot_be_recovered_or_reset_by_second_owner(self):
+        from aurora.ownership import DirectoryLease
+        session = await self.session()
+        self.model.call('autorizar_visitante', nome='Teste', data='2030-07-02')
+        pending = (await self.message(session, 'Autorize Teste em 2030-07-02.'))['confirmacoes_pendentes']
+        confirmation = pending[0]['id']
+        self.runtime.store.claim(session, confirmation, True)
+        with self.assertRaisesRegex(RuntimeError, 'ja esta em uso'):
+            Runtime(self.path, model=ScriptedModel())
+        with self.assertRaisesRegex(RuntimeError, 'ja esta em uso'):
+            DirectoryLease(self.path)
+        self.assertEqual('responding', self.runtime.store.confirmation(confirmation)['status'])
